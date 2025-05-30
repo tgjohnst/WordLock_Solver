@@ -4,6 +4,8 @@
 
 The Combination Lock Word Solver is a single-page web application designed to help users find all possible dictionary words from a letter-based combination lock. It allows for customizable lock configurations, including the number of dials and the letters on each dial. Found words can be sorted, filtered, and downloaded.
 
+You can find a hosted version of this application at [https://tgjohnst.github.io/WordLock_Solver/](https://tgjohnst.github.io/WordLock_Solver/).
+
 ## **Features**
 
 * **Customizable Lock Configuration:**  
@@ -22,9 +24,11 @@ The Combination Lock Word Solver is a single-page web application designed to he
 * **Default Settings:**  
   * Includes a dropdown menu with pre-configured settings for common lock types (e.g., "WordLock CL-663", "MasterLock PL-004").  
 * **User Interface:**  
-  * **Dark/Light Theme:** Toggle between dark and light themes for comfortable viewing. Theme preference is saved locally. (TODO)
   * **Responsive Design:** The application is designed to work well on various screen sizes.  
   * **Status Messages:** Provides feedback during operations like loading the dictionary or calculating words.
+
+## Screenshot
+![WordLock Solver Screenshot](screenshot.png)
 
 ## **Setup**
 
@@ -60,8 +64,6 @@ This application is a single HTML file that runs directly in your web browser. H
    * **Filter:** Type into the "Filter words..." box to dynamically narrow down the displayed list.  
    * **Sort:** Use the "Sort by" dropdown to arrange words alphabetically or by commonness (if available).  
    * **Download:** Click the "Download as CSV" button to save the currently displayed (and sorted) list of words to a CSV file on your computer. Words found using the \_ wildcard will have \_ appended to them.  
-5. **Toggle Theme:**  
-   * Click the sun/moon icon in the header to switch between light and dark themes.
 
 ## **Technical Details**
 
