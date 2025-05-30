@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Combination Lock Word Solver</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles if needed, supplementing Tailwind */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .dial-letter-input {
+            text-transform: uppercase;
+        }
+        /* For a subtle loading animation on the button */
+        .calculating {
+            position: relative;
+            color: transparent !important; /* Hide text */
+        }
+        .calculating::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            top: 50%;
+            left: 50%;
+            margin-top: -10px;
+            margin-left: -10px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        /* Custom scrollbar for word list */
+        #wordListContainer::-webkit-scrollbar {
+            width: 8px;
+        }
+        #wordListContainer::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        #wordListContainer::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        #wordListContainer::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex items-center justify-center p-4">
+    <div class="container bg-white shadow-xl rounded-lg p-6 md:p-8 w-full max-w-2xl">
+        <header class="mb-6 text-center">
+            <h1 class="text-3xl font-bold text-sky-600">Combination Lock Word Solver</h1>
+        </header>
+
+        <main>
+            <section id="configuration" class="mb-8 p-6 bg-slate-50 rounded-lg shadow">
+                <h2 class="text-xl font-semibold text-slate-700 mb-4">Configuration</h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label for="defaultSettings" class="block text-sm font-medium text-slate-600 mb-1">Load Default:</label>
+                        <select id="defaultSettings" class="w-full p-2 border border-slate-300 rounded-md shadow-sm focus:ring-sky-500 focus:border-sky-500">
+                            <option value="">Custom Setup</option>
+                            </select>
+                    </div>
+                    <div>
+                        <label for="numDials" class="block text-sm font-medium text-slate-600 mb-1">Number of Dials (3-6):</label>
+                        <input type="number" id="numDials" value="4" min="3" max="6" class="w-full p-2 border border-slate-300 rounded-md shadow-sm focus:ring-sky-500 focus:border-sky-500">
+                    </div>
+                </div>
+                 <div class="mb-4">
+                    <p class="text-xs text-slate-500">Guideline: Letters per dial (6-10). Enter the exact letters for each dial below. The last dial can include '_' as a wildcard for shorter words.</p>
+                </div>
+
+                <div id="dialInputsContainer" class="space-y-3 mb-6">
+                    </div>
+
+                <button id="calculateWordsBtn" class="w-full bg-sky-600 hover:bg-sky-700 text-white font-semibold py-3 px-4 rounded-lg shadow-md transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-opacity-50">
+                    Calculate Words
+                </button>
+            </section>
+
+            <section id="results" class="p-6 bg-slate-50 rounded-lg shadow">
+                <h2 class="text-xl font-semibold text-slate-700 mb-4">Possible Words</h2>
+                <div class="flex flex-col sm:flex-row gap-4 mb-4">
+                    <input type="text" id="searchInput" placeholder="Filter words..." class="flex-grow p-2 border border-slate-300 rounded-md shadow-sm focus:ring-sky-500 focus:border-sky-500">
+                    <div class="flex items-center gap-2">
+                        <label for="sortOptions" class="text-sm font-medium text-slate-600">Sort by:</label>
+                        <select id="sortOptions" class="p-2 border border-slate-300 rounded-md shadow-sm focus:ring-sky-500 focus:border-sky-500">
+                            <option value="alphabetical">Alphabetical</option>
+                            <option value="commonness">Commonness</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="wordListContainer" class="h-64 overflow-y-auto border border-slate-200 bg-white rounded-md p-3 mb-4">
+                    <ul id="wordList" class="divide-y divide-slate-200">
+                        </ul>
+                </div>
+                <p id="statusMessage" class="text-sm text-slate-600 mb-4 min-h-[1.25em] text-center"></p>
+                <button id="downloadCsvBtn" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-opacity-50" disabled>
+                    Download as CSV
+                </button>
+            </section>
+        </main>
+        
+        <footer class="mt-8 text-center">
+            <p class="text-xs text-slate-500 dark:text-slate-400">Note: Words are selected from a list of the top 100,000 most frequent English words (user-provided `dictionary.txt`).</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Ensure 'dictionary.txt' (and optionally 'word_frequencies.json') are in the same folder as this HTML file.</p>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DOM Elements ---
+            const defaultSettingsSelect = document.getElementById('defaultSettings');
+            const numDialsInput = document.getElementById('numDials');
+            const dialInputsContainer = document.getElementById('dialInputsContainer');
+            const calculateWordsBtn = document.getElementById('calculateWordsBtn');
+            const searchInput = document.getElementById('searchInput');
+            const sortOptionsSelect = document.getElementById('sortOptions');
+            const wordListUl = document.getElementById('wordList');
+            const statusMessageP = document.getElementById('statusMessage');
+            const downloadCsvBtn = document.getElementById('downloadCsvBtn');
+            const wordListContainer = document.getElementById('wordListContainer');
+
+            // --- Application State ---
+            let dictionary = new Set();
+            let wordFrequencies = {}; // For commonness sort
+            let currentFoundWords = []; // Array of found {word: string, commonness: number} objects
+
+            // --- Default Settings Data ---
+            const defaultLockSettings = [
+                {
+                    name: "WordLock CL-663",
+                    dials: 4,
+                    lettersPerDialGuideline: 10, // Guideline, actual letters defined below
+                    letters: [
+                        "LBFRMDT SWP",
+                        "HELOIAUYRW",
+                        "MRELAOKSNT",
+                        "KGDLYPETSM"
+                    ]
+                },
+                {
+                    name: "MasterLock PL-004",
+                    dials: 5,
+                    lettersPerDialGuideline: 10,
+                    letters: [
+                        "LSWBPFMDT A",
+                        "APORILCETN",
+                        "SERILANUTO",
+                        "ELDAOSKNR T",
+                        "RLSNTHYD_E" 
+                    ]
+                }
+            ];
+
+            // --- Initialization ---
+            async function initializeApp() {
+                populateDefaultSettings();
+                updateDialInputsUI(); 
+                await loadDictionaryAndFrequencies(); 
+
+                // Event Listeners
+                defaultSettingsSelect.addEventListener('change', handleDefaultSettingChange);
+                numDialsInput.addEventListener('input', () => { // Use input for immediate feedback
+                    // Clamp value
+                    if (parseInt(numDialsInput.value) < 3) numDialsInput.value = 3;
+                    if (parseInt(numDialsInput.value) > 6) numDialsInput.value = 6;
+                    updateDialInputsUI();
+                });
+                calculateWordsBtn.addEventListener('click', handleCalculateWords);
+                searchInput.addEventListener('input', () => displayWords(currentFoundWords)); 
+                sortOptionsSelect.addEventListener('change', () => displayWords(currentFoundWords)); 
+                downloadCsvBtn.addEventListener('click', downloadCSV);
+                
+                // Initial display if any words were pre-loaded (e.g. from a previous session if using localStorage, not in this version)
+                displayWords([]); 
+            }
+
+            function populateDefaultSettings() {
+                defaultLockSettings.forEach((setting, index) => {
+                    const option = document.createElement('option');
+                    option.value = index;
+                    option.textContent = setting.name;
+                    defaultSettingsSelect.appendChild(option);
+                });
+            }
+
+            function handleDefaultSettingChange() {
+                const selectedIndex = defaultSettingsSelect.value;
+                if (selectedIndex === "") { 
+                    numDialsInput.value = 3; 
+                    updateDialInputsUI();
+                    // Clear dial inputs
+                     const dialInputs = dialInputsContainer.querySelectorAll('.dial-letter-input');
+                     dialInputs.forEach(input => input.value = '');
+                    return;
+                }
+
+                const setting = defaultLockSettings[selectedIndex];
+                numDialsInput.value = setting.dials;
+                updateDialInputsUI(); 
+
+                const dialInputs = dialInputsContainer.querySelectorAll('.dial-letter-input');
+                dialInputs.forEach((input, i) => {
+                    if (setting.letters[i]) {
+                        input.value = setting.letters[i].replace(/\s/g, '').toUpperCase();
+                    } else {
+                        input.value = '';
+                    }
+                });
+            }
+
+            function updateDialInputsUI() {
+                const numDials = parseInt(numDialsInput.value) || 0;
+                dialInputsContainer.innerHTML = ''; 
+
+                if (numDials < 3 || numDials > 6) {
+                    statusMessageP.textContent = "Number of dials must be between 3 and 6.";
+                    // Disable calculate button if config is invalid
+                    calculateWordsBtn.disabled = true; 
+                    calculateWordsBtn.classList.remove('bg-sky-600', 'hover:bg-sky-700');
+                    calculateWordsBtn.classList.add('bg-slate-400', 'cursor-not-allowed');
+                    return;
+                }
+                // Re-enable calculate button if config is valid
+                calculateWordsBtn.disabled = false;
+                calculateWordsBtn.classList.remove('bg-slate-400', 'cursor-not-allowed');
+                calculateWordsBtn.classList.add('bg-sky-600', 'hover:bg-sky-700');
+
+
+                for (let i = 0; i < numDials; i++) {
+                    const div = document.createElement('div');
+                    div.className = 'flex items-center space-x-2';
+                    
+                    const label = document.createElement('label');
+                    label.textContent = `Dial ${i + 1}:`;
+                    label.className = 'text-sm font-medium text-slate-600 w-16 shrink-0';
+                    
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.className = 'dial-letter-input w-full p-2 border border-slate-300 rounded-md shadow-sm focus:ring-sky-500 focus:border-sky-500';
+                    input.placeholder = `Letters for dial ${i + 1}`;
+                    // Max length guideline - user can technically put more, validation happens on calculate
+                    // input.maxLength = 10; 
+                    
+                    input.addEventListener('input', (e) => { 
+                        const isLastDial = i === (numDials - 1);
+                        if (isLastDial) {
+                            e.target.value = e.target.value.toUpperCase().replace(/[^A-Z_]/g, '');
+                        } else {
+                            e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g, '');
+                        }
+                        // Validate length on input for immediate feedback (optional)
+                        if (e.target.value.length > 10) {
+                            // e.target.value = e.target.value.substring(0, 10); // Hard limit
+                            // Or show a warning
+                        }
+                    });
+                    div.appendChild(label);
+                    div.appendChild(input);
+                    dialInputsContainer.appendChild(div);
+                }
+            }
+
+            async function loadDictionaryAndFrequencies() {
+                statusMessageP.textContent = "Loading dictionary...";
+                calculateWordsBtn.disabled = true;
+                calculateWordsBtn.classList.add('calculating');
+
+
+                try {
+                    const response = await fetch('dictionary.txt'); 
+                    if (!response.ok) throw new Error('dictionary.txt not found or not accessible.');
+                    const text = await response.text();
+                    const words = text.split(/\r?\n/).map(word => word.toLowerCase().trim()).filter(word => word.length > 0);
+                    dictionary = new Set(words);
+                    if (dictionary.size === 0) throw new Error('Dictionary is empty or failed to parse.');
+                    statusMessageP.textContent = `Dictionary loaded (${dictionary.size.toLocaleString()} words).`;
+
+                    try {
+                        const freqResponse = await fetch('word_frequencies.json'); 
+                        if (freqResponse.ok) {
+                            wordFrequencies = await freqResponse.json();
+                            console.log("Word frequencies loaded.");
+                            sortOptionsSelect.querySelector('option[value="commonness"]').disabled = false;
+                        } else {
+                            console.warn("word_frequencies.json not found or failed to load. 'Commonness' sort disabled.");
+                            sortOptionsSelect.querySelector('option[value="commonness"]').textContent = "Commonness (N/A)";
+                            sortOptionsSelect.querySelector('option[value="commonness"]').disabled = true;
+                        }
+                    } catch (freqError) {
+                        console.warn("Error loading word_frequencies.json:", freqError);
+                        sortOptionsSelect.querySelector('option[value="commonness"]').textContent = "Commonness (Error)";
+                        sortOptionsSelect.querySelector('option[value="commonness"]').disabled = true;
+                    }
+
+                } catch (error) {
+                    statusMessageP.textContent = `Error: ${error.message}. App may not function correctly.`;
+                    console.error(error);
+                    // Keep button disabled if critical dictionary load fails
+                    return; // Exit if dictionary load failed
+                } finally {
+                    calculateWordsBtn.disabled = false;
+                    calculateWordsBtn.classList.remove('calculating');
+                }
+            }
+
+
+            function handleCalculateWords() {
+                if (dictionary.size === 0) {
+                    statusMessageP.textContent = "Dictionary not loaded. Cannot calculate words.";
+                    return;
+                }
+
+                const numDials = parseInt(numDialsInput.value);
+                const dialLetterInputs = Array.from(dialInputsContainer.querySelectorAll('.dial-letter-input'));
+                const dialsConfig = [];
+
+                for (let i = 0; i < dialLetterInputs.length; i++) {
+                    const input = dialLetterInputs[i];
+                    const letters = input.value.toUpperCase().replace(/\s/g, ''); 
+                    
+                    if (letters.length === 0) {
+                        statusMessageP.textContent = `Error: Dial ${i + 1} has no letters.`;
+                        wordListUl.innerHTML = ''; currentFoundWords = []; downloadCsvBtn.disabled = true;
+                        return;
+                    }
+                    if (letters.length < 6 || letters.length > 10) {
+                         statusMessageP.textContent = `Error: Dial ${i+1} must have between 6 and 10 letters. It has ${letters.length}.`;
+                         wordListUl.innerHTML = ''; currentFoundWords = []; downloadCsvBtn.disabled = true;
+                         return;
+                    }
+                    dialsConfig.push(letters.split(''));
+                }
+
+                if (dialsConfig.length !== numDials) {
+                    statusMessageP.textContent = "Configuration error. Please check dial inputs.";
+                     wordListUl.innerHTML = ''; currentFoundWords = []; downloadCsvBtn.disabled = true;
+                    return;
+                }
+
+                statusMessageP.textContent = "Calculating...";
+                calculateWordsBtn.disabled = true;
+                calculateWordsBtn.classList.add('calculating');
+                currentFoundWords = []; 
+                wordListUl.innerHTML = '<li class="p-3 text-center text-slate-500">Calculating...</li>';
+
+
+                // Use setTimeout to allow UI to update before heavy computation
+                setTimeout(() => {
+                    generateCombinationsRecursive(dialsConfig, "", 0);
+
+                    displayWords(currentFoundWords); 
+                    if (currentFoundWords.length === 0) {
+                        statusMessageP.textContent = "No words found for this combination.";
+                        downloadCsvBtn.disabled = true;
+                    } else {
+                        statusMessageP.textContent = `Found ${currentFoundWords.length.toLocaleString()} word(s).`;
+                        downloadCsvBtn.disabled = false;
+                    }
+                    calculateWordsBtn.disabled = false;
+                    calculateWordsBtn.classList.remove('calculating');
+                }, 50); // Small delay
+            }
+
+            function generateCombinationsRecursive(dials, currentCombination, dialIndex) {
+                const numTotalDials = dials.length;
+
+                if (dialIndex === numTotalDials) {
+                    const word = currentCombination.toLowerCase();
+                    // Word must use all dials (full length)
+                    if (word.length === numTotalDials && dictionary.has(word)) {
+                        currentFoundWords.push({word: word, commonness: wordFrequencies[word] || 0});
+                    }
+                    return;
+                }
+
+                const lettersOnCurrentDial = dials[dialIndex];
+                for (let letter of lettersOnCurrentDial) {
+                    if (letter === '_' && dialIndex === numTotalDials - 1) {
+                        // Handle underscore on the last dial: means word from previous N-1 dials
+                        const shorterWord = currentCombination.toLowerCase(); 
+                        if (shorterWord.length === numTotalDials - 1 && dictionary.has(shorterWord)) {
+                             currentFoundWords.push({word: shorterWord, commonness: wordFrequencies[shorterWord] || 0});
+                        }
+                        // Don't add '_' to combination, effectively skipping this dial for this path
+                    } else if (letter !== '_') { // Only append actual letters
+                        generateCombinationsRecursive(dials, currentCombination + letter, dialIndex + 1);
+                    }
+                }
+            }
+            
+            function displayWords(words) {
+                wordListUl.innerHTML = ''; 
+
+                let wordsToDisplay = [...words];
+
+                const searchTerm = searchInput.value.toLowerCase().trim();
+                if (searchTerm) {
+                    wordsToDisplay = wordsToDisplay.filter(entry => entry.word.toLowerCase().includes(searchTerm));
+                }
+
+                const sortBy = sortOptionsSelect.value;
+                if (sortBy === 'alphabetical') {
+                    wordsToDisplay.sort((a, b) => a.word.localeCompare(b.word));
+                } else if (sortBy === 'commonness') {
+                    // Sort by commonness (descending), then alphabetically for ties
+                    wordsToDisplay.sort((a, b) => {
+                        const commonnessDiff = (b.commonness || 0) - (a.commonness || 0);
+                        if (commonnessDiff !== 0) return commonnessDiff;
+                        return a.word.localeCompare(b.word);
+                    });
+                }
+
+                if (wordsToDisplay.length === 0) {
+                    if (words.length > 0 && searchTerm) {
+                         wordListUl.innerHTML = '<li class="p-3 text-center text-slate-500">No words match your filter.</li>';
+                    } else if (words.length === 0 && !calculateWordsBtn.classList.contains('calculating')) {
+                        // This case is usually handled by the statusMessageP after calculation
+                        // wordListUl.innerHTML = '<li class="p-3 text-center text-slate-500">No words found.</li>';
+                    }
+                     // If calculating, the message is already there.
+                } else {
+                    wordsToDisplay.forEach(entry => {
+                        const li = document.createElement('li');
+                        li.className = 'p-3 hover:bg-slate-50 text-sm';
+                        li.textContent = entry.word;
+                        wordListUl.appendChild(li);
+                    });
+                }
+                 // Update status message based on filtered results if a search term exists
+                if (searchTerm && words.length > 0) {
+                    statusMessageP.textContent = `Showing ${wordsToDisplay.length.toLocaleString()} of ${words.length.toLocaleString()} word(s).`;
+                } else if (words.length > 0) {
+                     statusMessageP.textContent = `Found ${words.length.toLocaleString()} word(s).`;
+                }
+                // If no words were originally found, the message from handleCalculateWords persists.
+            }
+
+            function downloadCSV() {
+                if (currentFoundWords.length === 0) {
+                    statusMessageP.textContent = "No words to download.";
+                    return;
+                }
+
+                let wordsForCsv = [...currentFoundWords]; // Use the full list of found words
+                const sortBy = sortOptionsSelect.value; // Apply current sort to CSV for consistency
+                if (sortBy === 'alphabetical') {
+                    wordsForCsv.sort((a, b) => a.word.localeCompare(b.word));
+                } else if (sortBy === 'commonness') {
+                     wordsForCsv.sort((a, b) => {
+                        const commonnessDiff = (b.commonness || 0) - (a.commonness || 0);
+                        if (commonnessDiff !== 0) return commonnessDiff;
+                        return a.word.localeCompare(b.word);
+                    });
+                }
+                
+                const csvHeader = "Word" + (Object.keys(wordFrequencies).length > 0 ? ",CommonnessRank(LowerIsMoreCommon)" : "") + "\n";
+                const csvRows = wordsForCsv.map(entry => {
+                    let row = entry.word;
+                    if (Object.keys(wordFrequencies).length > 0) {
+                        // A simple rank based on frequency value; higher frequency = lower rank number
+                        // This is a pseudo-rank for demonstration. Real ranking is complex.
+                        // We'll just output the frequency score if available.
+                        row += `,${entry.commonness || 0}`;
+                    }
+                    return row;
+                });
+
+                const csvContent = "data:text/csv;charset=utf-8," + csvHeader + csvRows.join("\n");
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", "lock_words_solution.csv");
+                document.body.appendChild(link); 
+                link.click();
+                document.body.removeChild(link);
+                statusMessageP.textContent = "CSV downloaded.";
+            }
+
+            // --- Start the App ---
+            initializeApp();
+        });
+    </script>
+</body>
+</html>
